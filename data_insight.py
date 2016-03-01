@@ -1,8 +1,9 @@
-import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 import pandas as pd ,numpy as np,scipy as sp 
 from scipy import spatial
+from collections import Counter, defaultdict
+import csv
 import re
 
 
@@ -31,7 +32,7 @@ def device_id_handle(devicefile):
 			ValDevHandle[dev] = handle
 	return ValDevHandle
 
-###########################################################################################################
+#############################################version 1 test################################################
 ## create generate negative sample by selecting the largest Jaccard diatance cookie for the given device ##
 ###########################################################################################################
 def generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle):
@@ -48,11 +49,11 @@ def generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle):
 				for ip in ip_union:
 					m_ip_pv_vec.append(id_ip.get(d).get(ip,[0])[0])
 					c_ip_pv_vec.append(id_ip.get(c).get(ip,[0])[0])
-					temp_jacd = jaccard_distance(m_ip_pv_vec,c_ip_pv_vec)
-					# print temp_jacd
-					if temp_jacd > max_jacd:
-						max_jacd = temp_jacd
-						best_candidate = c
+				temp_jacd = jaccard_distance(m_ip_pv_vec,c_ip_pv_vec)
+				# print temp_jacd,m_ip_pv_vec, c_ip_pv_vec
+				if temp_jacd > max_jacd:
+					max_jacd = temp_jacd
+					best_candidate = c
 		negative_sample.append([d,c])
 	return negative_sample
 
@@ -70,7 +71,9 @@ def jaccard_distance(c_media_pv, m_mobile_pv):
 	return scipy.spatial.distance.jaccard(c_media_pv,m_mobile_pv)
 
 
-def load_ip_info(ipfile):
+def load_ip_info(ipfile,XIPS):
+	IPCoo=defaultdict(set)
+	IPDev=defaultdict(set)
 	with open(ipfile) as fp:
 		fp.readline()
 		id_ip  = dict()
@@ -88,10 +91,19 @@ def load_ip_info(ipfile):
 				arr[4] = np.float_(Indiv[5])
 				arr[5] = np.float_(Indiv[6])
 				ValIPS[Indiv[0]] = arr
+
 			id = line.split(',')[0]
 			id_type = line.split(',')[1]
 			id_ip[id] = ValIPS
-	return id_ip
+
+			if(id_type == '0'):
+				for k in ValIPS.keys():
+					IPDev[k].add(id)
+			else:
+				for k in ValIPS.keys():
+					IPCoo[k].add(id)
+	return id_ip,IPDev, IPCoo
+
 ###########################################################################################################
 ## calc the mean F05 score of the cross_validation predictions result #####################################
 ###########################################################################################################
@@ -110,12 +122,103 @@ def calculateF06(results, targets):
 		F05.appned(f05)
 	return np.mean(F05)
 
+###########################################################################################################
+## Define the privateness of the IP addresss###############################################################
+###########################################################################################################
+
+def loadIPAGG(ipaggfile):
+	XIPS = dict()
+	with open(ipaggfile, 'rb') as csvfile:
+		reader = csv.reader(csvfile,delimiter = ',')
+		reader.next()
+		for row in reader:
+			datoIP = np.zeros(5)
+			datoIP[0] = np.float_(row[1])
+			datoIP[1] = np.float_(row[2])
+			datoIP[2] = np.float_(row[3])
+			datoIP[3] = np.float_(row[4])
+			datoIP[4] = np.float_(row[5])
+			XIPS[row[0]] = datoIP
+	return XIPS
+
+def candidate_generation_1(device,cookie, id_ip,IPDev,IPCoo):
+	Candidates = dict()
+	for d in device:
+		candidatestotal = set()
+		device_ips = id_ip.get(d,dict()).keys()
+		for ip in device_ips:
+			if(XIPS.get(ip)[0] == 0) and (len(IPDev.get(ip,set()) + IPCoo.get(ip,set()))) <=30:
+				candidates = IPCoo.get(ip,dict().keys())
+				for candidate in candidates:
+					candidatestotal.add(candidate)
+
+		if len(candidatestotal) == 0:
+			for ip in device_ips:
+				if len(IPDev.get(ip,set()) + IPCoo.get(ip,set())) <=30:
+					candidates = IPCoo.get(ip,dict().keys())
+					for candidate in candidates:
+						candidatestotal.add(candidate)
+
+		if len(candidatestotal) == 0:
+			ip_size = dict()
+			for ip in device_ips:
+				if XIPS.get(ip)[0] ==0:
+					ip_size[ip] = len(IPDev.get(ip,dict().keys())) + len(IPCoo.get(ip,dict().keys()))
+			ip_size = sorted(ip_size.items(), lambda x, y: cmp(x[1], y[1]))
+			ips = []
+			for i in range(min(5, len(ip_size))):
+				ip = ip_size[i][0]
+				candidates = IPCoo.get(ip,dict().keys())
+				for candidate in candidates:
+					candidatestotal.add(candidate)
+
+		if len(candidatestotal) == 0:
+			ip_size = dict()
+			for ip in device_ips:
+				ip_size[ip] = len(IPDev.get(ip,dict().keys())) + len(IPCoo.get(ip,dict().keys()))
+			ip_size = sorted(ip_size.items(), lambda x, y: cmp(x[1], y[1]))
+			ips = []
+			for i in range(min(5, len(ip_size))):
+				ip  = ip_size[i][0]
+				candidates = IPCoo.get(ip,dict().keys())
+				for candidate in candidates:
+					candidatestotal.add(candidate)	
+
+	Candidates[device]=candidatestotal	
+	return Candidates
+
+def ip_vector_representation():
+	
 
 
 
-ValDevHandle = device_id_handle('dev_train_basic.csv')
-ValCookieHandle = device_id_handle('cookie_all_basic.csv')
-id_ip = load_ip_info('id_all_ip.csv')
+
+
+
+
+
+
+
+def ip_privateness():
+
+
+
+
+
+
+
+
+
+
+if __main__():
+	ValDevHandle = device_id_handle('dev_train_basic.csv')
+	ValCookieHandle = device_id_handle('cookie_all_basic.csv')
+	XIPS = loadIPAGG('ipagg_all.csv')
+	id_ip,IPDev, IPCoo = load_ip_info('id_all_ip.csv',XIPS)
+	negative_sample = generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle)
+	positive_sample = generate_candidate(cookie_mat,device_train)
+
+
 
 
 
