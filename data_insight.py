@@ -32,6 +32,17 @@ def device_id_handle(devicefile):
 			ValDevHandle[dev] = handle
 	return ValDevHandle
 
+
+def handle_cookie(cookiefile):
+	with open(cookiefile) as fp:
+		HandleCookie = defaultdict(set)
+		fp.readline()
+		for line in fp:
+			cookie = line.split(',')[1]
+			handle = line.split(',')[0]
+			HandleCookie[handle].add(cookie)
+	return HandleCookie
+
 #############################################version 1 test################################################
 ## create generate negative sample by selecting the largest Jaccard diatance cookie for the given device ##
 ###########################################################################################################
@@ -60,12 +71,28 @@ def generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle):
 ###########################################################################################################
 ## create the positive candidate by selecting the same handle cookie and device ,and pair them ############
 ###########################################################################################################
-def generate_candidate(cookie_mat,device_train):
-	cookie_train = pd.DataFrame(cookie_mat[1:]).ix[:,[0,1]]
-	cookie_train.columns = cookie_mat[0][:2]
-	temp = device_train.set_index('drawbridge_handle').join(cookie_train.set_index('drawbridge_handle'))
-	return temp
+def generate_positive(ValDevHandle,ValCookieHandle,HandleCookie):
+	length = 0
+	positive_sample = defaultdict(set)
+	for d in device:
+		handle_id = ValDevHandle.get(d)
+		if handle_id != '-1':
+			cookies = HandleCookie.get(handle_id,dict().keys())
+			for cookie in cookies:
+				positive_sample[d].add(cookie)
+				length +=1
+	return positive_sample,length
 
+# random sample create the negative sample#################################################################
+def generate_negative(device, cookie,id_ip,ValDevHandle,ValCookieHandle,length):
+	negative_sample = defaultdict(set)
+	for i in range(length):
+		d = random.choice(device)
+		c = random.choice(cookie)
+		if (ValDevHandle.get(d, dict().keys()) != ValCookieHandle.get(c, dict().keys())) and ValDevHandle.get(d, dict().keys()) != '-1' and ValCookieHandle.get(d, dict().keys()) != '-1':
+			negative_sample[d].add(c)
+			print d,c
+	return negative_sample
 
 def jaccard_distance(c_media_pv, m_mobile_pv):
 	return scipy.spatial.distance.jaccard(c_media_pv,m_mobile_pv)
@@ -141,7 +168,7 @@ def loadIPAGG(ipaggfile):
 			XIPS[row[0]] = datoIP
 	return XIPS
 
-def candidate_generation_1(device,cookie, id_ip,IPDev,IPCoo):
+def candidate_generation(device,cookie, id_ip,IPDev,IPCoo):
 	Candidates = dict()
 	for d in device:
 		candidatestotal = set()
@@ -187,19 +214,61 @@ def candidate_generation_1(device,cookie, id_ip,IPDev,IPCoo):
 	Candidates[device]=candidatestotal	
 	return Candidates
 
-def ip_vector_representation():
-	
+def ip_vector_representation(id):
+	alpha = 1.0
+	beta = 1.0
+	iv_norm = dict()
+	iv_sqrt = dict()
+	iv_log  = dict()
+	for d in id:
+		ips = set(id_ip.get(d).keys())
+		for ip in ips:
+			id_ip_pv_vec_norm.append(id_ip.get(d).get(ip,[0])[0])
+			id_ip_pv_vec_sqrt.append((id_ip.get(d).get(ip,[0])[0]+alpha)**0.5)
+			id_ip_pv_vec_log.append(np.log(id_ip.get(d).get(ip,[0])[0]+beta))
+		sum_norm = np.sum(id_ip_pv_vec_norm)*1.0
+		sum_sqrt = np.sum(id_ip_pv_vec_sqrt)*1.0
+		sum_log  = np.sum(id_ip_pv_vec_log)*1.0
+		iv_norm[d] = 1.0* id_ip_pv_vec_norm/sum_norm
+		iv_sqrt[d] = 1.0* id_ip_pv_vec_sqrt/sum_sqrt
+		iv_log[d]  = 1.0* id_ip_pv_vec_log /sum_log
+	return iv_norm,iv_sqrt, iv_log
+
+def ip_privateness_feature(ips,XIPS,IPCoo, IPDev):
+	W_ip_feature = dict()
+	for ip in ips:
+		temp = []
+		temp.append(XIPS.get(ip, dict().keys())[0])
+		temp.append(XIPS.get(ip, dict().keys())[1]**(0.5))
+		temp.append(XIPS.get(ip, dict().keys())[2])
+		temp.append(XIPS.get(ip, dict().keys())[3]**(0.5))
+		temp.append(XIPS.get(ip, dict().keys())[4]**(0.5))
+		temp.append(len(IPCoo.get(ip,dict()).keys()))
+		temp.append(len(IPDev.get(ip,dict()).keys()))
+		W_ip_feature[ip] = temp
+	return W_ip_feature
+
+def ip_footprint_similarity(device_id,cookie_id,iv):
+	device_ip = id_ip.get(device_id,dict()).keys()
+	cookie_ip = id_ip.get(cookie_id,dict()).keys()
+	intersec_ip = list(set(device_ip) & set(cookie_ip))
+	s_sum = s_dot = 0.0
+	for ip in intersec_ip:
+		s_sum += (ip_vector_representation(cookie)+ip_vector_representation(device_id)).dot(W_ip(ip))
+		s_dot += ip_vector_representation(cookie).dot(ip_vector_representation(device_id)).dot(W_ip(ip))
+	return s_sum, s_dot
+
+def sigmoid(x): 
+    return 1.0/(1+exp(-x)) 
+
+def likelihood(x,y):
+	return sigmoid()
 
 
 
 
 
 
-
-
-
-
-def ip_privateness():
 
 
 
@@ -213,10 +282,13 @@ def ip_privateness():
 if __main__():
 	ValDevHandle = device_id_handle('dev_train_basic.csv')
 	ValCookieHandle = device_id_handle('cookie_all_basic.csv')
+	HandleCookie = handle_cookie('cookie_all_basic.csv')
 	XIPS = loadIPAGG('ipagg_all.csv')
-	id_ip,IPDev, IPCoo = load_ip_info('id_all_ip.csv',XIPS)
-	negative_sample = generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle)
-	positive_sample = generate_candidate(cookie_mat,device_train)
+	ips = XIPS.keys()
+	id_ip,IPDev, IPCoo = load_ip_info('id_all_ip.csv')
+	Candidates = candidate_generation_1(device,cookie, id_ip,IPDev,IPCoo)
+	positive_sample,length = generate_positive(ValDevHandle,ValCookieHandle,HandleCookie)
+	negative_sample = generate_negative(device, cookie,id_ip,ValDevHandle,ValCookieHandle,length)
 
 
 
