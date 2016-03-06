@@ -6,28 +6,7 @@ from collections import Counter, defaultdict
 import csv
 import re
 
-
-# generate negative sample
-# device, ip, pv
-# cookie, ip, pv
-device_train = pd.read_csv('dev_train_basic.csv')
-device_test = pd.read_csv('dev_test_basic.csv')
-cookie_all_basic = open('cookie_all_basic.csv').readlines()
-cookie_mat = []
-for line in cookie_all_basic:
-	curLine = line.strip().split(',')
-	cookie_mat.append(curLine)
-
-cookieAll =  pd.DataFrame(cookie_mat).ix[:,1].unique()
-cookie_mat = filter(lambda line: line[0] != '-1', cookie_mat[1:])
-
-cookieKnown = pd.DataFrame(cookie_mat).ix[:,1].unique()
-device = device_train.ix[:,1].unique()
-deviceTest = device_test.ix[:,1].unique()
-
-########################################################################
-###########################Handle vs device id #########################
-#######apply for training data
+##Handle vs device id,apply for training data
 def device_id_handle(devicefile):
 	with open(devicefile) as  fp:
 		ValDevHandle = defaultdict(set)
@@ -38,9 +17,8 @@ def device_id_handle(devicefile):
 			ValDevHandle[dev].add(handle)
 	return ValDevHandle
 
-########################################################################
-###########################Handle vs cookie id #########################
-#######apply for training data
+
+##Handle vs cookie id ,apply for training data
 def handle_cookie(cookiefile):
 	with open(cookiefile) as fp:
 		HandleCookie = defaultdict(set)
@@ -73,9 +51,7 @@ def all_cookie_basic(cookiefile):
 			HandleCookie[handle].add(cookie)
 	return HandleCookie	
 
-#############################################version 1 test################################################
-## create generate negative sample by selecting the largest Jaccard diatance cookie for the given device ##
-###########################################################################################################
+## create generate negative sample by selecting the largest Jaccard diatance cookie for the given device for test
 def generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle):
 	negative_sample = []
 	for d in device:
@@ -98,9 +74,8 @@ def generate_negative_sample(device, cookie,id_ip,ValDevHandle,ValCookieHandle):
 		negative_sample.append([d,c])
 	return negative_sample
 
-###########################################################################################################
-## create the positive candidate by selecting the same handle cookie and device ,and pair them ############
-###########################################################################################################
+
+## create the positive candidate by selecting the same handle cookie and device ,and pair them
 def generate_positive(ValDevHandle,HandleCookie,device):
 	length = 0
 	positive_sample = defaultdict(set)
@@ -113,7 +88,7 @@ def generate_positive(ValDevHandle,HandleCookie,device):
 				length +=1
 	return positive_sample,length
 
-# random sample create the negative sample#################################################################
+# random sample create the negative sample
 def generate_negative(device, cookie,ValDevHandle,ValCookieHandle,length):
 	negative_sample = defaultdict(set)
 	for i in range(length):
@@ -161,9 +136,8 @@ def load_ip_info(ipfile):
 					IPCoo[k].add(id)
 	return id_ip,IPDev, IPCoo
 
-###########################################################################################################
-## calc the mean F05 score of the cross_validation predictions result #####################################
-###########################################################################################################
+
+## calc the mean F05 score of the cross_validation predictions result
 def calculateF06(results, targets):
 	BetaQ = 0.25
 	F05 = []
@@ -179,10 +153,8 @@ def calculateF06(results, targets):
 		F05.appned(f05)
 	return np.mean(F05)
 
-###########################################################################################################
-## Define the privateness of the IP addresss###############################################################
-###########################################################################################################
 
+## Define the privateness of the IP addresss
 def loadIPAGG(ipaggfile):
 	XIPS = dict()
 	with open(ipaggfile, 'rb') as csvfile:
@@ -346,6 +318,20 @@ def stochasticGradDesc(devices, positive_sample,negative_sample,XIPS,IPCoo,IPDev
 
 
 if __main__():
+	device_train = pd.read_csv('dev_train_basic.csv')
+	device_test = pd.read_csv('dev_test_basic.csv')
+	cookie_all_basic = open('cookie_all_basic.csv').readlines()
+	cookie_mat = []
+	for line in cookie_all_basic:
+		curLine = line.strip().split(',')
+		cookie_mat.append(curLine)
+
+	cookieAll =  pd.DataFrame(cookie_mat).ix[:,1].unique()
+	cookie_mat = filter(lambda line: line[0] != '-1', cookie_mat[1:])
+
+	cookieKnown = pd.DataFrame(cookie_mat).ix[:,1].unique()
+	device = device_train.ix[:,1].unique()
+	deviceTest = device_test.ix[:,1].unique()
 	ValDevHandle = device_id_handle('dev_train_basic.csv') # device with Handle
 	ValcookieHandle = cookie_handle('cookie_all_basic.csv') # coookie_handle 
 	HandleCookie = handle_cookie('cookie_all_basic.csv') # cookie with Known Hanldle
