@@ -109,7 +109,7 @@ def parser_cookie_ua():
 	return cookie_brand, cookie_family,cookie_model, os_family,user_agent_family	
 
 # test the number cross ip and not belong to one person
-def create_negative_sample_rule(Devices, Cookies, ValCookieIP, ValDeviceIP, ValDevHandle, ValCookieHandle, alpha):
+def create_negative_sample_rule_log(Devices, Cookies, ValCookieIP, ValDeviceIP, ValDevHandle, ValCookieHandle, alpha):
 	ip_cross_negative_rule = defaultdict(set)
 	for device in Devices:
 		cookie_negative = []
@@ -127,7 +127,7 @@ def create_negative_sample_rule(Devices, Cookies, ValCookieIP, ValDeviceIP, ValD
 			print device,cookie_final, jaccard_distance[~np.argsort(jaccard_distance)[0]]
 	return ip_cross_negative_rule
 
-def create_negative_sample_rule(Devices, Cookies, ValCookieIP, ValDeviceIP, ValDevHandle, ValCookieHandle, alpha):
+def create_negative_sample_rule_sqrt(Devices, Cookies, ValCookieIP, ValDeviceIP, ValDevHandle, ValCookieHandle, alpha):
 	ip_cross_negative_rule = defaultdict(set)
 	for device in Devices:
 		cookie_negative = []
@@ -139,7 +139,7 @@ def create_negative_sample_rule(Devices, Cookies, ValCookieIP, ValDeviceIP, ValD
 				cookie_negative.append(cookie)
 		if len(cookie_negative) >0:
 			for cookie in cookie_negative:
-					jaccard_distance.append(np.sqrt(1.0*len(ValDevicePro.get(device) & ValCookiePro.get(cookie)) + alpha) / np.sqrt(1.0*len(ValDevicePro.get(device) |ValCookiePro.get(cookie)) + alpha))
+					jaccard_distance.append(np.sqrt(1.0*len(ValDevicePro.get(device) & ValCookiePro.get(cookie)) + alpha) / np.sqrt(1.0*len(ValDevicePro.get(device) | ValCookiePro.get(cookie)) + alpha))
 			cookie_final = cookie_negative[~np.argsort(jaccard_distance)[0]]
 			ip_cross_negative_rule[device].add(cookie_final)
 			print device,cookie_final, jaccard_distance[~np.argsort(jaccard_distance)[0]]
@@ -195,8 +195,12 @@ def property_type_dict():
 	with open('media_feature_new.csv','rb') as csvfile:
 		spamreader = csv.reader(csvfile, delimiter = ',')
 		for line in spamreader:
-			property = line
-
+			media = line[0]
+			properties_1 = line[9]
+			properties_2 = line[-1]
+			property_type[media].add(properties_1)
+			property_type[media].add(properties_2)
+		return property_type
 
 # ip vector : is_cellu, total view, sqrt of pc os, sqrt of mobile model, number of cookies, number of mobiles
 def ip_feature_vector(ips):
@@ -243,13 +247,13 @@ def create_dataset(Candidates, ValDeviceIP, ValDevicePro, ValCookieIP, ValCookie
 			Pros_insec= (setdevpros & setcoopros)
 			Pros_union = (setdevpros | setcoopros)
 
-			miips=set() 
-			for ip in IPS:
-				if len(ValIPDevice.get(ip, set())) <= 10 and len(ValIPCookie.get(ip, set())) <= 25:
-					miips.add(ip)
+			# miips=set() 
+			#for ip in IPS:
+			#	if len(ValIPDevice.get(ip, set())) <= 10 and len(ValIPCookie.get(ip, set())) <= 25:
+			#		miips.add(ip)
 
-			row.append(len(ValDeviceIP.get(device,set()).keys()))
-			row.append(len(ValDevicePro.get(device, set()).keys()))
+			row.append(len(ValDeviceIP.get(device,dict().keys())))
+			row.append(len(ValDevicePro.get(device, dict().keys())))
 			row.append(ValDeviceView.get(device))
 
 			row.append(len(ValCookieIP.get(cookie, set()).keys()))
@@ -259,7 +263,7 @@ def create_dataset(Candidates, ValDeviceIP, ValDevicePro, ValCookieIP, ValCookie
 			row.append(len(IPS))
 			row.append(np.sqrt(len(IPS) + alpha) / np.sqrt(len(IPS_union) + alpha))
 
-			row.append(len(miips))
+			# row.append(len(miips))
 
 			row.append(len(Pros_insec))
 			row.append(np.sqrt(len(Pros_insec) + alpha) / np.sqrt(len(Pros_union)+ alpha))
