@@ -251,6 +251,7 @@ def ip_log_vector_representation(id):
 
 def ip_privateness_feature(ip,XIPS,IPCoo, IPDev):
 	temp = []
+	temp.append(1.0)
 	temp.append(XIPS.get(ip, dict().keys())[0])
 	temp.append(XIPS.get(ip, dict().keys())[1]**(0.5))
 	temp.append(XIPS.get(ip, dict().keys())[2])
@@ -311,10 +312,22 @@ def cost(alpha, device,positive_sample,negative_sample,XIPS,IPCoo,IPDev,weights)
 
 def stochasticGradDesc(devices, positive_sample,negative_sample,XIPS,IPCoo,IPDev):
 	alpha  =0.01
-	weights = np.ones((7))
+	weights = np.zeros(8)
 	for device in devices:
-		weights += alpha* weights *cost(0.01,device, positive_sample,negative_sample,XIPS,IPCoo,IPDev,weights)
+		weights += alpha* weights *cost(0.1,device, positive_sample,negative_sample,XIPS,IPCoo,IPDev,weights)
 	return weights
+
+
+def generate_likelihood(deviceTest, Candidates,t,weights, XIPS, IPCoo, IPDev):
+	device_cookie_likelihood  = dict()
+	for device_id in devices:
+		for cookie_id in Candidates.get(device_id):
+			device_cookie_likelihood[(device_id,cookie_id)]  = sigmoid(t +ip_footprint_similarity_sdot(device_id,cookie_id,weights, XIPS, IPCoo, IPDev))
+	return device_cookie_likelihood
+
+
+
+
 
 
 if __main__():
@@ -348,6 +361,74 @@ if __main__():
 	weights = stochasticGradDesc(devices, positive_sample,negative_sample,XIPS,IPCoo,IPDev)
 
 	
+
+def generate_device_user_likelihood(Candidates,ValcookieHandle,device_cookie_likelihood):
+	generate_device_user_likelihood = dict()
+	device_user = defaultdict(set)
+	for device_id in deviceTest:
+		cookies_temp = Candidates.get(device_id)
+		user_likelihood = defaultdict(set)
+		for cookie_id in cookies_temp:
+			user = ValcookieHandle.get(cookie_id)
+			user_likelihood[user].add(device_cookie_likelihood.get((device_id, cookie_id)))
+		for user in user_likelihood.keys():
+			generate_device_user_likelihood[(device, user)] = max(user_likelihood.get(user))
+			device_user[device_id] = user
+	return generate_device_user_likelihood,device_user
+
+def SmartGen(device_id, k,device_user,generate_device_user_likelihood):
+	user_candidate = []
+	precision = []
+	candidates_n = estimation = candidates_l = 0.0
+	users = device_user.get(device_id)
+	likelihood =estimation_list =  []
+	for user in users:
+		likelihood.append(generate_device_user_likelihood.get(user))
+	for k in range(1, len(users)):
+		for i in ~np.argsort(likelihood)[:k]:
+			user = users[i]
+			user_candidate.append(user)
+			candidates_n += len(AllCookie.get(user))
+			candidates_l += generate_device_user_likelihood.get(user)
+		for i in ~np.argsort(likelihood)[:k]:
+			user = users[i]
+			precision = np.float_(len(AllCookie.get(user))) / np.float_(candidates_n)
+			estimation += (generate_device_user_likelihood.get(user)*1.0 / candidates_l)* ((1.25*precision) / (0.25*precision + 1.0))
+		estimation_list.append(estimation)
+	k_final = ~np.argsort(estimation_list)
+	cookie_final = []
+	for i in ~np.argsort(likelihood)[:k_final]:
+		user = users[i]
+		cookie_candidates = HandleCookie.get(user)
+		for cookie in cookie_candidates:
+			cookie_final.append(cookie)
+	return cookie_final
+
+def SmartGen+(device_id, k,device_user,generate_device_user_likelihood):
+	user_candidate = []
+	precision = []
+	candidates_n = estimation = candidates_l = 0.0
+	users = device_user.get(device_id)
+	likelihood = []
+	for user in users:
+		likelihood.append(generate_device_user_likelihood.get(user))
+	user = ~np.argsort(likelihood)[0]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
